@@ -1,5 +1,11 @@
 # Snap — Supernote plugin
 
+<p align="center">
+  <img src="docs/snap-demo.gif" alt="Snap demo: hand-drawn shapes snap into perfect shapes" width="360">
+  <br>
+  <sub><a href="docs/snap-demo.mp4">Full-quality video (MP4)</a></sub>
+</p>
+
 Formerly **ShapeSnap**.
 
 Draw a **rectangle**, a **circle**, an **arrow**, a **curly brace**, a **square root** or **coordinate axes** and hold the pen still for a moment (350 ms by default). The stroke is replaced by a perfect shape:
