@@ -1,6 +1,6 @@
 {
   "name": "ShapeSnap",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -40,7 +40,7 @@
   },
   "description": "Draw a rectangle or a circle, hold the pen still for a moment: it snaps into a perfect shape.",
   "author": "Charles Cheval",
-  "license": "MIT",
+  "license": "CC-BY-NC-SA-4.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/CharlesCheval/supernote-snap.git"
