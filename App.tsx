@@ -80,7 +80,7 @@ function Switch({
   );
 }
 
-type ShapeKey = 'rect' | 'circle' | 'arrow' | 'brace' | 'sqrt' | 'axes';
+type ShapeKey = 'rect' | 'triangle' | 'circle' | 'arrow' | 'brace' | 'sqrt' | 'axes';
 
 /**
  * Shape icons drawn with plain views and ASCII / common glyphs, so they render
@@ -92,6 +92,9 @@ function ShapeIcon({k, c}: {k: ShapeKey; c: string}) {
       return <View style={[styles.iconRect, {borderColor: c}]} />;
     case 'circle':
       return <View style={[styles.iconCircle, {borderColor: c}]} />;
+    case 'triangle':
+      // A solid triangle drawn with borders (no glyph: fonts vary).
+      return <View style={[styles.iconTriangle, {borderBottomColor: c}]} />;
     case 'axes':
       // An "L" with an arrow head at the end of each axis.
       return (
@@ -124,6 +127,7 @@ type ChipSpec = {label: string; k: NumKey; unit: string};
 const SHAPE_SETTINGS: {k: ShapeKey; chips: ChipSpec[]}[] = [
   {k: 'circle', chips: []},
   {k: 'rect', chips: [{label: 'Straighten', k: 'rectSnapDegrees', unit: '°'}]},
+  {k: 'triangle', chips: [{label: 'Straighten', k: 'triangleSnapDegrees', unit: '°'}]},
   {
     k: 'arrow',
     chips: [
@@ -293,6 +297,15 @@ const styles = StyleSheet.create({
   shapeOn: {backgroundColor: '#000000', borderColor: '#000000'},
   iconRect: {width: 40, height: 28, borderWidth: 3},
   iconCircle: {width: 36, height: 36, borderRadius: 18, borderWidth: 3},
+  iconTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 19,
+    borderRightWidth: 19,
+    borderBottomWidth: 32,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
   iconAxesBox: {width: 40, height: 40},
   iconAxes: {
     position: 'absolute',

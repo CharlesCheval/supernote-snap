@@ -19,6 +19,7 @@ export type P = {x: number; y: number};
 
 export type Shape =
   | {kind: 'rect'; corners: [P, P, P, P]}
+  | {kind: 'triangle'; corners: [P, P, P]}
   | {kind: 'circle'; cx: number; cy: number; r: number}
   | {kind: 'arrow'; tail: P; tip: P}
   | SymbolShape;
@@ -29,6 +30,10 @@ export type RecognizeOptions = {
   /** Minimum shape size (px): anything smaller is handwriting. */
   minSize: number;
   rect: boolean;
+  /** Triangles (any 3 corners); off when absent. */
+  triangle?: boolean;
+  /** Triangles with a side within this angle of the page axes are turned square to it (default 8). */
+  triangleSnapDegrees?: number;
   circle: boolean;
   arrow: boolean;
   /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
@@ -349,6 +354,93 @@ export function arrowPoints(tail: P, tip: P, headLength: number, fillSpacing = 0
   return pts;
 }
 
+/** Convex hull (monotone chain), counter-clockwise. */
+function hull(pts: P[]): P[] {
+  const p = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: P, a: P, b: P) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: P[] = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) {
+      lower.pop();
+    }
+    lower.push(q);
+  }
+  const upper: P[] = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) {
+      upper.pop();
+    }
+    upper.push(q);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+function segDist(p: P, a: P, b: P): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+
+/**
+ * Triangle fit: the largest triangle on the loop's convex hull; its error is
+ * the mean distance from the loop to the triangle's sides, relative to size.
+ * A side within `snapDegrees` of horizontal / vertical is made exactly so
+ * (the triangle turns about its centre).
+ */
+export function fitTriangle(loop: P[], snapDegrees = 8): {corners: [P, P, P]; err: number} {
+  let h = hull(loop);
+  if (h.length > 48) {
+    const step = h.length / 48;
+    h = Array.from({length: 48}, (_, i) => h[Math.floor(i * step)]);
+  }
+  let best: [P, P, P] = [loop[0], loop[1], loop[2]];
+  let bestArea = -1;
+  for (let i = 0; i < h.length; i++) {
+    for (let j = i + 1; j < h.length; j++) {
+      for (let k = j + 1; k < h.length; k++) {
+        const a = h[i], b = h[j], c = h[k];
+        const area = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+        if (area > bestArea) {
+          bestArea = area;
+          best = [a, b, c];
+        }
+      }
+    }
+  }
+  const xs = loop.map(p => p.x);
+  const ys = loop.map(p => p.y);
+  const size = Math.max(1, Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  let sum = 0;
+  for (const p of loop) {
+    sum += Math.min(segDist(p, best[0], best[1]), segDist(p, best[1], best[2]), segDist(p, best[2], best[0]));
+  }
+  const err = sum / loop.length / size;
+  // Straighten: the side closest to the page axes, if within snapDegrees.
+  let turn = 0;
+  let closest = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const a = best[i];
+    const b = best[(i + 1) % 3];
+    const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+    const off = ((deg % 90) + 135) % 90 - 45; // signed distance to the nearest axis
+    if (Math.abs(off) < Math.abs(closest)) {
+      closest = off;
+    }
+  }
+  if (Math.abs(closest) <= snapDegrees) {
+    turn = (-closest * Math.PI) / 180;
+  }
+  const cx = (best[0].x + best[1].x + best[2].x) / 3;
+  const cy = (best[0].y + best[1].y + best[2].y) / 3;
+  const rot = (p: P): P => ({
+    x: cx + (p.x - cx) * Math.cos(turn) - (p.y - cy) * Math.sin(turn),
+    y: cy + (p.x - cx) * Math.sin(turn) + (p.y - cy) * Math.cos(turn),
+  });
+  return {corners: [rot(best[0]), rot(best[1]), rot(best[2])], err};
+}
+
 export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
   if (raw.length < 8) {
     return {shape: null, reason: 'stroke too short'};
@@ -413,6 +505,14 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
 
   if (gap > 0.25 * k) {
     return tryOpen('shape not closed');
+  }
+  // Triangle first: three corners, its sides hugging the loop much better than
+  // a rectangle or a circle would.
+  if (opts.triangle && corners >= 2 && corners <= 4) {
+    const tri = fitTriangle(loop, opts.triangleSnapDegrees ?? 8);
+    if (tri.err <= 0.035 * k && tri.err < 0.6 * rect.err && tri.err < 0.6 * circle.err) {
+      return {shape: {kind: 'triangle', corners: tri.corners}, reason: 'triangle', metrics};
+    }
   }
   const rectOk =
     opts.rect &&

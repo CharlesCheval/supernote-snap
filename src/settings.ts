@@ -16,6 +16,10 @@ export type Settings = {
   rect: boolean;
   /** Rectangles tilted less than this are straightened to the page axes (0 = never). */
   rectSnapDegrees: number;
+  /** Triangle, any three corners. */
+  triangle: boolean;
+  /** Triangles with a side within this angle of the page axes are turned square to it (0 = never). */
+  triangleSnapDegrees: number;
   circle: boolean;
   /** Straight arrow: a shaft with a small head drawn at its end, in one stroke. */
   arrow: boolean;
@@ -61,6 +65,8 @@ export const DEFAULTS: Settings = {
   tolerance: 5,
   rect: true,
   rectSnapDegrees: 8,
+  triangle: true,
+  triangleSnapDegrees: 8,
   circle: true,
   arrow: true,
   arrowSnapDegrees: 8,
@@ -83,6 +89,7 @@ export const LIMITS = {
   tolerance: {min: 1, max: 5, step: 1},
   arrowSnapDegrees: {min: 0, max: 20, step: 1},
   rectSnapDegrees: {min: 0, max: 20, step: 1},
+  triangleSnapDegrees: {min: 0, max: 20, step: 1},
   axesSnapDegrees: {min: 0, max: 20, step: 1},
   arrowHeadPct: {min: 30, max: 200, step: 10},
   axesHeadPct: {min: 30, max: 200, step: 10},

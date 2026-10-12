@@ -163,6 +163,10 @@ function shapeToPixels(shape: Shape, toPixel: (p: P) => P): Shape {
     const [a, b, c, d] = shape.corners.map(toPixel);
     return {kind: 'rect', corners: [a, b, c, d]};
   }
+  if (shape.kind === 'triangle') {
+    const [a, b, c] = shape.corners.map(toPixel);
+    return {kind: 'triangle', corners: [a, b, c]};
+  }
   if (shape.kind === 'arrow') {
     return {kind: 'arrow', tail: toPixel(shape.tail), tip: toPixel(shape.tip)};
   }
@@ -273,12 +277,14 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): obje
         },
       ];
     case 'rect':
+    case 'triangle':
       return [polyline([...shape.corners, shape.corners[0]], lasso)];
   }
 }
 
 const CREATED: Record<Shape['kind'], string> = {
   rect: '▭ rectangle created',
+  triangle: '△ triangle created',
   circle: '◯ circle created',
   arrow: '→ arrow created',
   brace: '{ brace created',
@@ -522,6 +528,8 @@ async function handleStroke(el: Element) {
       tolerance: settings.tolerance,
       minSize: TINY_SHAPE_SIZE,
       rect: settings.rect,
+      triangle: settings.triangle,
+      triangleSnapDegrees: settings.triangleSnapDegrees,
       circle: settings.circle,
       arrow: settings.arrow,
       arrowSnapDegrees: settings.arrowSnapDegrees,

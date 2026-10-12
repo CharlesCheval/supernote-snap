@@ -279,3 +279,34 @@ test('really tiny circle (about 1 mm, few points) with the tiny minimum size', (
   }));
   expect(recognize(circle, {...opts, minSize: 10}).shape?.kind).toBe('circle');
 });
+
+describe('triangles', () => {
+  const tri = {...opts, triangle: true};
+  const triangle = (a: P, b: P, c: P) => polyline([a, b, c, {x: a.x + 0.02 * (b.x - a.x), y: a.y + 0.02 * (b.y - a.y)}]);
+  test('wobbly triangle', () =>
+    expect(kind(hand(triangle({x: 400, y: 100}, {x: 700, y: 600}, {x: 100, y: 600}), 6), tri)).toBe('triangle'));
+  test('right triangle', () =>
+    expect(kind(hand(triangle({x: 100, y: 100}, {x: 100, y: 600}, {x: 700, y: 600}), 6), tri)).toBe('triangle'));
+  test('flat, obtuse triangle', () =>
+    expect(kind(hand(triangle({x: 100, y: 500}, {x: 900, y: 500}, {x: 650, y: 280}), 5), tri)).toBe('triangle'));
+  test('a base tilted 5° is made horizontal', () => {
+    const pts = rotateAll(triangle({x: 400, y: 100}, {x: 700, y: 600}, {x: 100, y: 600}), 5, {x: 400, y: 400});
+    const r = recognize(hand(pts, 4), tri);
+    expect(r.shape?.kind).toBe('triangle');
+    const c = (r.shape as {corners: P[]}).corners;
+    const ys = c.map(p => p.y).sort((a, b) => b - a);
+    expect(Math.abs(ys[0] - ys[1])).toBeLessThan(2);
+  });
+  test('rectangles and circles stay what they are', () => {
+    expect(kind(hand(rect(100, 100, 700, 400), 8), tri)).toBe('rect');
+    expect(kind(hand(rect(200, 200, 600, 600), 8), tri)).toBe('rect');
+    expect(kind(hand(roundRect(100, 100, 700, 450, 35), 5), tri)).toBe('rect');
+    expect(kind(hand(arc(500, 500, 200, 200, 1.15), 6), tri)).toBe('circle');
+    expect(kind(hand(arc(500, 500, 230, 180, 1.02), 6), tri)).toBe('circle');
+    expect(kind(hand(rotateAll(rect(100, 100, 700, 400), 25, {x: 400, y: 250}), 6), tri)).toBe('rect');
+    expect(kind(arc(500, 500, 400, 110, 1.02), tri)).not.toBe('triangle');
+    expect(kind(hand(arc(300, 300, 45, 45, 1.05), 2), tri)).toBe('circle');
+  });
+  test('triangle off: not recognised', () =>
+    expect(kind(hand(triangle({x: 400, y: 100}, {x: 700, y: 600}, {x: 100, y: 600}), 6))).toBeNull());
+});
