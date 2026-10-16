@@ -89,9 +89,14 @@ const TRI_ANY: Pt[] = [
   [13, 4],
 ];
 const TRI_TYPES: {
-  k: 'triangleRight' | 'triangleIsosceles' | 'triangleEquilateral';
+  k:
+    | 'triangleAny'
+    | 'triangleRight'
+    | 'triangleIsosceles'
+    | 'triangleEquilateral';
   pts: Pt[];
 }[] = [
+  {k: 'triangleAny', pts: TRI_ANY},
   {
     k: 'triangleRight',
     pts: [
@@ -249,7 +254,7 @@ function ShapeRow({k, chips}: {k: ShapeKey; chips: ChipSpec[]}) {
           ))}
         {k === 'triangle' ? (
           <View style={styles.chip}>
-            <Text style={styles.chipLabel}>Always as</Text>
+            <Text style={styles.chipLabel}>Types</Text>
             <View style={styles.types}>
               {TRI_TYPES.map(t => (
                 <Pressable

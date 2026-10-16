@@ -391,7 +391,11 @@ function segDist(p: P, a: P, b: P): number {
  * A side within `snapDegrees` of horizontal / vertical is made exactly so
  * (the triangle turns about its centre).
  */
-export type TriangleType = 'right' | 'isosceles' | 'equilateral';
+/** 'any': the triangle may stay as drawn, a type is taken only when close. */
+export type TriangleType = 'any' | 'right' | 'isosceles' | 'equilateral';
+
+/** With 'any': a type is taken when its corners move less than this, relative to the longest side (mean). */
+const CLOSE_TO_TYPE = 0.07;
 
 type Tri = [P, P, P];
 
@@ -458,11 +462,17 @@ function asEquilateral(t: Tri): Tri {
   })) as Tri;
 }
 
-/** The drawn triangle turned into the closest of the given types (unchanged if none). */
+/**
+ * The drawn triangle turned into the closest of the given types. With 'any'
+ * (or no type at all), it stays as drawn unless a type is close.
+ */
 export function regularTriangle(t: Tri, types: TriangleType[]): Tri {
   let best: Tri = t;
   let bestMove = Infinity;
   for (const type of types) {
+    if (type === 'any') {
+      continue;
+    }
     const out = type === 'right' ? asRight(t) : type === 'isosceles' ? asIsosceles(t) : asEquilateral(t);
     const mv = type === 'equilateral' ? moved(t, matchOrder(t, out)) : moved(t, out);
     if (mv < bestMove) {
@@ -470,7 +480,9 @@ export function regularTriangle(t: Tri, types: TriangleType[]): Tri {
       best = out;
     }
   }
-  return best;
+  const free = types.includes('any') || !types.some(x => x !== 'any');
+  const longest = Math.max(dist(t[0], t[1]), dist(t[1], t[2]), dist(t[2], t[0])) || 1;
+  return free && bestMove / 3 / longest > CLOSE_TO_TYPE ? t : best;
 }
 
 /** `out`'s corners reordered to face `t`'s (nearest first), for measuring the move. */

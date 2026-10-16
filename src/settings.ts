@@ -21,9 +21,11 @@ export type Settings = {
   /** Triangles with a side within this angle of the page axes are turned square to it (0 = never). */
   triangleSnapDegrees: number;
   /**
-   * Triangle types every triangle is drawn as (the closest one ticked):
-   * right, isosceles, equilateral. None ticked: any triangle, as drawn.
+   * Triangle types: any (kept as drawn unless close to a ticked type), right,
+   * isosceles, equilateral. Without "any", every triangle is drawn as the
+   * closest ticked type.
    */
+  triangleAny: boolean;
   triangleRight: boolean;
   triangleIsosceles: boolean;
   triangleEquilateral: boolean;
@@ -74,6 +76,7 @@ export const DEFAULTS: Settings = {
   rectSnapDegrees: 8,
   triangle: true,
   triangleSnapDegrees: 8,
+  triangleAny: true,
   triangleRight: false,
   triangleIsosceles: false,
   triangleEquilateral: false,

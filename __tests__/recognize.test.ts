@@ -329,6 +329,14 @@ describe('triangles', () => {
     const s3 = sides(corners(nearRight, ['right', 'equilateral']));
     expect(Math.abs(s3[0] ** 2 + s3[1] ** 2 - s3[2] ** 2) / s3[2] ** 2).toBeLessThan(0.01);
   });
+  test('with "any": a scalene triangle stays as drawn, a near-right one becomes right', () => {
+    const s3 = sides(corners(scalene, ['any', 'right', 'isosceles', 'equilateral']));
+    const pyth = (x: number[]) => Math.abs(x[0] ** 2 + x[1] ** 2 - x[2] ** 2) / x[2] ** 2;
+    expect(pyth(s3)).toBeGreaterThan(0.05);
+    expect(s3[1] - s3[0]).toBeGreaterThan(20);
+    const nearRight = triangle({x: 110, y: 100}, {x: 100, y: 600}, {x: 700, y: 610});
+    expect(pyth(sides(corners(nearRight, ['any', 'right'])))).toBeLessThan(0.01);
+  });
   test('triangle off: not recognised', () =>
     expect(kind(hand(triangle({x: 400, y: 100}, {x: 700, y: 600}, {x: 100, y: 600}), 6))).toBeNull());
 });
