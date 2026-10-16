@@ -30,6 +30,9 @@ export class HoldTracker {
   /** Last pen lift: final still duration and time received. */
   lastUp: {stillMs: number; receivedAt: number} | null = null;
 
+  /** Time of the last pen or finger event received (any tool). */
+  lastActivity = 0;
+
   private upWaiters: (() => void)[] = [];
 
   constructor(private readonly radius: () => number) {}
@@ -40,6 +43,7 @@ export class HoldTracker {
   }
 
   feed(e: PenMotion, now: number) {
+    this.lastActivity = now;
     if (e.toolType !== TOOL_PEN) {
       return;
     }
@@ -64,6 +68,12 @@ export class HoldTracker {
       this.upWaiters = [];
       waiters.forEach(fn => fn());
     }
+  }
+
+  /** Same as takeRecent, without consuming it. */
+  peekRecent(now: number, maxAgeMs = 1500): number | null {
+    const up = this.lastUp;
+    return up && now - up.receivedAt <= maxAgeMs ? up.stillMs : null;
   }
 
   /** Still duration of the stroke that just ended, if recent. */

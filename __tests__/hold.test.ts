@@ -10,7 +10,9 @@ test('final pause measured between last movement and pen lift', () => {
   }
   h.feed(pen(2, 403, 2, 1300), 0); // jitter < 10 px
   h.feed(pen(1, 404, 1, 1800), 5000);
-  expect(h.takeRecent(5100)).toBe(600);
+  expect(h.peekRecent(5100)).toBe(600);
+  expect(h.peekRecent(9000)).toBeNull(); // stale
+  expect(h.takeRecent(5100)).toBe(600); // peeking does not consume
   expect(h.takeRecent(5100)).toBeNull(); // consumed
 });
 

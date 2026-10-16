@@ -490,6 +490,15 @@ async function handleStroke(el: Element) {
     report({stillMs: 0, holdSource: 'clock', result, details: []});
     return;
   }
+  // Cheap early exit, before any host call: the pen-up event already shows
+  // no pause at the end of the stroke (most handwriting).
+  if (settings.holdMs > 0) {
+    const quick = hold.peekRecent(Date.now());
+    if (quick != null && quick < settings.holdMs) {
+      report({stillMs: quick, holdSource: 'clock', result: 'no pause: stroke kept', details: []});
+      return;
+    }
+  }
   // Second guard: a lasso selection right after the pen lifts means the user was selecting.
   if (await lassoActive()) {
     report({stillMs: 0, holdSource: 'clock', result: 'lasso selection active: ignored', details: []});
@@ -627,29 +636,90 @@ async function handleStroke(el: Element) {
   // Without a lasso the host does not redraw the area: the deleted stroke stays
   // in its screen buffer and shows again wherever the pen passes, for 5-10 s
   // (seen with axes). Saving alone did not redraw it (test.17): the note is
-  // saved, then reloaded, which redraws the page.
+  // saved, then reloaded, which redraws the page. Done later, once the pen and
+  // fingers have been still for a while (redrawWhenIdle): reloading right
+  // after the next stroke could drop that stroke (0.9.0-0.9.1, reported).
   if (!lassoAfter || shape.kind === 'axes') {
-    if (hold.penDown) {
-      await hold.nextUp();
+    details.push('redraw: once the pen rests');
+    scheduleRedraw(place, inPdf);
+  }
+  report({stillMs, holdSource, result: CREATED[shape.kind], details});
+}
+
+/** No pen or finger activity for this long before the page is redrawn. */
+const REDRAW_IDLE_MS = 1500;
+/** Still writing after this long: no redraw, the remnant fades by itself. */
+const REDRAW_GIVE_UP_MS = 30000;
+let redrawToken = 0;
+
+function scheduleRedraw(place: string, inPdf: boolean) {
+  const token = ++redrawToken;
+  redrawWhenIdle(token, place, inPdf).then(
+    r => noteRedraw(r),
+    e => noteRedraw(`failed (${e?.message ?? e})`),
+  );
+}
+
+/** Adds the redraw outcome to the measure shown in the settings. */
+function noteRedraw(r: string) {
+  if (lastMeasure) {
+    report({...lastMeasure, details: [...lastMeasure.details, `redraw: ${r}`]});
+  }
+}
+
+/** True once the pen is up and nothing touched the screen for REDRAW_IDLE_MS. */
+function idle(): boolean {
+  return !hold.penDown && !busy && Date.now() - hold.lastActivity >= REDRAW_IDLE_MS;
+}
+
+/**
+ * Saves then reloads the note (PDFs: opens and closes the plugin view) once
+ * the user has stopped writing. Never while a stroke is drawn or handled, and
+ * never if a stroke started between the save and the reload: the reload reads
+ * the file, so anything not saved would be lost. If timers stall, no redraw
+ * happens, which is harmless.
+ */
+async function redrawWhenIdle(token: number, place: string, inPdf: boolean): Promise<string> {
+  const since = Date.now();
+  for (;;) {
+    if (token !== redrawToken) {
+      return 'superseded by a newer shape';
     }
-    if (inPdf && (await currentPlace()) === place && !hold.penDown) {
+    if (Date.now() - since > REDRAW_GIVE_UP_MS) {
+      return 'skipped: still writing';
+    }
+    if (hold.penDown) {
+      await Promise.race([hold.nextUp(), sleep(1000)]);
+      continue;
+    }
+    if (!idle()) {
+      await sleep(Math.max(100, REDRAW_IDLE_MS - (Date.now() - hold.lastActivity)));
+      continue;
+    }
+    if ((await currentPlace()) !== place) {
+      return 'skipped: file or page changed';
+    }
+    const downs = hold.downs;
+    const unchanged = () => idle() && hold.downs === downs && token === redrawToken;
+    if (!unchanged()) {
+      continue;
+    }
+    if (inPdf) {
       // No save for PDFs in the SDK, so no reload (unsaved writing could be
       // lost): the plugin view is opened and closed over the page instead.
       // Showing the same page again did not redraw it (test.20).
-      details.push(`redraw (PDF): ${await blinkRedraw()}`);
-    } else if ((await currentPlace()) === place && !hold.penDown) {
-      const saved: any = await PluginNoteAPI.saveCurrentNote();
-      if (saved?.success && saved.result !== false && !hold.penDown) {
-        const reloaded: any = await PluginCommAPI.reloadFile();
-        details.push(`redraw: ${ok<boolean>(reloaded) != null ? 'reloaded' : errorText(reloaded)}`);
-      } else {
-        details.push(`redraw: not saved (${errorText(saved)})`);
-      }
+      return `PDF: ${await blinkRedraw()}`;
     }
+    const saved: any = await PluginNoteAPI.saveCurrentNote();
+    if (!(saved?.success && saved.result !== false)) {
+      return `not saved (${errorText(saved)})`;
+    }
+    if (!unchanged() || (await currentPlace()) !== place || !unchanged()) {
+      continue; // writing resumed: what was saved is stale, wait again
+    }
+    const reloaded: any = await PluginCommAPI.reloadFile();
+    return ok<boolean>(reloaded) != null ? 'reloaded' : errorText(reloaded);
   }
-  // The redraw step is shown with the result while it is being tested.
-  const redraw = details.find(d => d.startsWith('redraw'));
-  report({stillMs, holdSource, result: redraw ? `${CREATED[shape.kind]} · ${redraw}` : CREATED[shape.kind], details});
 }
 
 let queue: Promise<void> = Promise.resolve();
