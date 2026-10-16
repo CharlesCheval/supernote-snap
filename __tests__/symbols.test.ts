@@ -11,6 +11,7 @@ const opts = {
   brace: true,
   sqrt: true,
   axes: true,
+  triangle: false,
 };
 
 function hand(points: P[], amp: number, seed = 11): P[] {
@@ -100,6 +101,26 @@ describe('square roots', () => {
   test('check mark (no bar) is not a √', () =>
     expect(kind(polyline([{x: 100, y: 300}, {x: 160, y: 380}, {x: 330, y: 120}]))).toBeNull());
   test('disabled', () => expect(kind(sqrt(100, 500, 200, 500), {...opts, sqrt: false})).toBeNull());
+  // Its tick and rise, closed by the cut of the "overshoot", made a triangle.
+  test('with triangles on, a √ with a long tick and a short bar stays a √ (was a triangle)', () => {
+    const h = 150;
+    const pts = polyline([
+      {x: 100, y: 600 - 0.5 * h},
+      {x: 100 + 0.15 * h, y: 600},
+      {x: 100 + 0.25 * h, y: 600 - h},
+      {x: 100 + 0.75 * h, y: 600 - h},
+    ]);
+    expect(kind(pts, {...opts, tolerance: 5, triangle: true})).toBe('sqrt');
+  });
+  test.each([
+    [200, 500, 0.35],
+    [200, 120, 0.35],
+    [200, 90, 0.6],
+    [300, 150, 0.5],
+    [70, 90, 0.35],
+    [400, 300, 0.35],
+  ])('with triangles on, a √ (h %i, bar %i, tick %f) stays a √', (h, bar, tick) =>
+    expect(kind(hand(sqrt(100, 600, h, bar, tick), 2), {...opts, triangle: true})).toBe('sqrt'));
 });
 
 describe('axes', () => {
@@ -156,5 +177,8 @@ describe('real drawings', () => {
     ['hooked entry, rising bar', [[1060, 623], [1085, 622], [1105, 625], [1108, 640], [1105, 662], [1110, 640], [1113, 610], [1115, 597], [1200, 595], [1297, 591]]],
     ['leaning rise', [[1040, 890], [1060, 888], [1073, 892], [1072, 905], [1065, 920], [1072, 895], [1077, 860], [1078, 848], [1150, 846], [1247, 847]]],
     ['bar drooping at the end', [[842, 1032], [870, 1034], [890, 1037], [882, 1060], [872, 1085], [878, 1050], [876, 1000], [950, 998], [1030, 1000], [1075, 1012]]],
-  ] as [string, [number, number][]][])('square root: %s', (_, pts) => expect(kind(real(pts))).toBe('sqrt'));
+  ] as [string, [number, number][]][])('square root: %s', (_, pts) => {
+    expect(kind(real(pts))).toBe('sqrt');
+    expect(kind(real(pts), {...opts, triangle: true})).toBe('sqrt');
+  });
 });

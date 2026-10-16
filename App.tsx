@@ -346,7 +346,7 @@ function App(): React.JSX.Element {
       </Text>
 
       <View style={styles.footer}>
-        <Text style={styles.measure} numberOfLines={1}>
+        <Text style={styles.measure} numberOfLines={2}>
           {m ? `Last stroke: ${m.result}` : 'Last stroke: none yet'}
         </Text>
         <Pressable

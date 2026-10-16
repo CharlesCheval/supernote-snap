@@ -621,9 +621,20 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
   if (gap > 0.25 * k) {
     return tryOpen('shape not closed');
   }
+  // What was cut after the closest return to the start: an overshoot follows
+  // the loop; a long tail away from it (a square root's bar, its tick and rise
+  // closed by the cut) means an open shape.
+  let tailAway = 0;
+  for (const p of path.slice(end + 1)) {
+    let d = Infinity;
+    for (let i = 0; i < loop.length; i++) {
+      d = Math.min(d, segDist(p, loop[i], loop[(i + 1) % loop.length]));
+    }
+    tailAway = Math.max(tailAway, d / big);
+  }
   // Triangle first: three corners, its sides hugging the loop much better than
   // a rectangle or a circle would.
-  if (opts.triangle && corners >= 2 && corners <= 4) {
+  if (opts.triangle && corners >= 2 && corners <= 4 && tailAway <= 0.12) {
     const tri = fitTriangle(loop, opts.triangleSnapDegrees ?? 8, opts.triangleTypes);
     if (tri.err <= 0.035 * k && tri.err < 0.6 * rect.err && tri.err < 0.6 * circle.err) {
       return {shape: {kind: 'triangle', corners: tri.corners}, reason: 'triangle', metrics};

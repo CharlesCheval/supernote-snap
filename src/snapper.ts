@@ -478,6 +478,7 @@ async function currentPlace(): Promise<string> {
 }
 
 async function handleStroke(el: Element) {
+  const startedAt = Date.now();
   const settings = getSettings();
   const stroke = el.stroke;
   if (!stroke) {
@@ -587,9 +588,12 @@ async function handleStroke(el: Element) {
   }
   // Never change the page while the pen is writing the next stroke: the host
   // dropped that stroke (measured with a 150 ms hold). Wait for the pen to lift.
+  let waitedMs = 0;
   if (hold.penDown) {
-    details.push('waited for the next stroke to end');
+    const t = Date.now();
     await hold.nextUp();
+    waitedMs = Date.now() - t;
+    details.push(`waited ${waitedMs} ms for the next stroke to end`);
   }
   // Remove the stroke first (per setting), then insert the shape; restore the stroke if insertion fails.
   const deletion = await removeStroke(el);
@@ -641,7 +645,13 @@ async function handleStroke(el: Element) {
     details.push('redraw: once the pen rests');
     scheduleRedraw(place, inPdf);
   }
-  report({stillMs, holdSource, result: CREATED[shape.kind], details});
+  // Shown in the settings: how long the shape took, and why when it was slow.
+  const timing = [
+    `${Date.now() - startedAt} ms`,
+    waitedMs ? `${waitedMs} ms waiting for your next stroke` : '',
+    /scan/.test(deletion.how) ? 'stroke found by a page scan' : '',
+  ].filter(Boolean);
+  report({stillMs, holdSource, result: `${CREATED[shape.kind]} (${timing.join(' · ')})`, details});
 }
 
 /** No pen or finger activity for this long before the page is redrawn. */
