@@ -530,6 +530,9 @@ async function handleStroke(el: Element) {
       rect: settings.rect,
       triangle: settings.triangle,
       triangleSnapDegrees: settings.triangleSnapDegrees,
+      triangleTypes: (['right', 'isosceles', 'equilateral'] as const).filter(
+        t => settings[({right: 'triangleRight', isosceles: 'triangleIsosceles', equilateral: 'triangleEquilateral'} as const)[t]],
+      ),
       circle: settings.circle,
       arrow: settings.arrow,
       arrowSnapDegrees: settings.arrowSnapDegrees,

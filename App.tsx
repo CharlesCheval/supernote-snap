@@ -80,7 +80,85 @@ function Switch({
   );
 }
 
-type ShapeKey = 'rect' | 'triangle' | 'circle' | 'arrow' | 'brace' | 'sqrt' | 'axes';
+type Pt = [number, number];
+
+/** Corners in a 40×36 box: any triangle (the shape button) and the three types. */
+const TRI_ANY: Pt[] = [
+  [3, 33],
+  [37, 33],
+  [13, 4],
+];
+const TRI_TYPES: {
+  k: 'triangleRight' | 'triangleIsosceles' | 'triangleEquilateral';
+  pts: Pt[];
+}[] = [
+  {
+    k: 'triangleRight',
+    pts: [
+      [5, 4],
+      [5, 33],
+      [35, 33],
+    ],
+  },
+  {
+    k: 'triangleIsosceles',
+    pts: [
+      [20, 3],
+      [32, 33],
+      [8, 33],
+    ],
+  },
+  {
+    k: 'triangleEquilateral',
+    pts: [
+      [20, 5],
+      [37, 33],
+      [3, 33],
+    ],
+  },
+];
+
+/**
+ * An outlined triangle, its sides drawn as rotated bars with round ends (the
+ * same 3 px line as the other icons; no glyph or SVG).
+ */
+function TriangleIcon({pts, c}: {pts: Pt[]; c: string}) {
+  const w = 3;
+  return (
+    <View style={styles.iconTriangle}>
+      {pts.map(([x1, y1], i) => {
+        const [x2, y2] = pts[(i + 1) % 3];
+        const len = Math.hypot(x2 - x1, y2 - y1) + w;
+        return (
+          <View
+            key={i}
+            style={[
+              styles.triangleSide,
+              {
+                left: (x1 + x2) / 2 - len / 2,
+                top: (y1 + y2) / 2 - w / 2,
+                width: len,
+                height: w,
+                borderRadius: w / 2,
+                backgroundColor: c,
+                transform: [{rotate: `${Math.atan2(y2 - y1, x2 - x1)}rad`}],
+              },
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+type ShapeKey =
+  | 'rect'
+  | 'triangle'
+  | 'circle'
+  | 'arrow'
+  | 'brace'
+  | 'sqrt'
+  | 'axes';
 
 /**
  * Shape icons drawn with plain views and ASCII / common glyphs, so they render
@@ -93,8 +171,7 @@ function ShapeIcon({k, c}: {k: ShapeKey; c: string}) {
     case 'circle':
       return <View style={[styles.iconCircle, {borderColor: c}]} />;
     case 'triangle':
-      // A solid triangle drawn with borders (no glyph: fonts vary).
-      return <View style={[styles.iconTriangle, {borderBottomColor: c}]} />;
+      return <TriangleIcon pts={TRI_ANY} c={c} />;
     case 'axes':
       // An "L" with an arrow head at the end of each axis.
       return (
@@ -127,7 +204,10 @@ type ChipSpec = {label: string; k: NumKey; unit: string};
 const SHAPE_SETTINGS: {k: ShapeKey; chips: ChipSpec[]}[] = [
   {k: 'circle', chips: []},
   {k: 'rect', chips: [{label: 'Straighten', k: 'rectSnapDegrees', unit: '°'}]},
-  {k: 'triangle', chips: [{label: 'Straighten', k: 'triangleSnapDegrees', unit: '°'}]},
+  {
+    k: 'triangle',
+    chips: [{label: 'Straighten', k: 'triangleSnapDegrees', unit: '°'}],
+  },
   {
     k: 'arrow',
     chips: [
@@ -167,6 +247,24 @@ function ShapeRow({k, chips}: {k: ShapeKey; chips: ChipSpec[]}) {
           .map(c => (
             <Chip key={c.k} {...c} />
           ))}
+        {k === 'triangle' ? (
+          <View style={styles.chip}>
+            <Text style={styles.chipLabel}>Always as</Text>
+            <View style={styles.types}>
+              {TRI_TYPES.map(t => (
+                <Pressable
+                  key={t.k}
+                  style={[styles.type, s[t.k] && styles.shapeOn]}
+                  onPress={() => updateSettings({[t.k]: !s[t.k]})}>
+                  <TriangleIcon
+                    pts={t.pts}
+                    c={s[t.k] ? '#ffffff' : '#9d9d9d'}
+                  />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
         {k === 'axes' ? (
           <Switch
             label="Ticks"
@@ -297,14 +395,18 @@ const styles = StyleSheet.create({
   shapeOn: {backgroundColor: '#000000', borderColor: '#000000'},
   iconRect: {width: 40, height: 28, borderWidth: 3},
   iconCircle: {width: 36, height: 36, borderRadius: 18, borderWidth: 3},
-  iconTriangle: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 19,
-    borderRightWidth: 19,
-    borderBottomWidth: 32,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
+  iconTriangle: {width: 40, height: 36},
+  triangleSide: {position: 'absolute'},
+  types: {flexDirection: 'row'},
+  type: {
+    width: 52,
+    height: 48,
+    marginRight: 8,
+    borderWidth: 2,
+    borderColor: '#9d9d9d',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconAxesBox: {width: 40, height: 40},
   iconAxes: {

@@ -34,6 +34,8 @@ export type RecognizeOptions = {
   triangle?: boolean;
   /** Triangles with a side within this angle of the page axes are turned square to it (default 8). */
   triangleSnapDegrees?: number;
+  /** Types a triangle is turned into (the closest one); none: kept as drawn. */
+  triangleTypes?: TriangleType[];
   circle: boolean;
   arrow: boolean;
   /** Arrows within this angle of horizontal / vertical are snapped to it (0 = never). */
@@ -389,7 +391,107 @@ function segDist(p: P, a: P, b: P): number {
  * A side within `snapDegrees` of horizontal / vertical is made exactly so
  * (the triangle turns about its centre).
  */
-export function fitTriangle(loop: P[], snapDegrees = 8): {corners: [P, P, P]; err: number} {
+export type TriangleType = 'right' | 'isosceles' | 'equilateral';
+
+type Tri = [P, P, P];
+
+const mid = (a: P, b: P): P => ({x: (a.x + b.x) / 2, y: (a.y + b.y) / 2});
+const moved = (a: Tri, b: Tri) => dist(a[0], b[0]) + dist(a[1], b[1]) + dist(a[2], b[2]);
+
+/** Right angle at the corner closest to one: that corner moved onto the circle on the hypotenuse. */
+function asRight(t: Tri): Tri {
+  let best: Tri = t;
+  let bestMove = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const r = t[i], p = t[(i + 1) % 3], q = t[(i + 2) % 3];
+    const m = mid(p, q);
+    const d = dist(r, m) || 1;
+    const k = dist(p, q) / 2 / d;
+    const out = [...t] as Tri;
+    out[i] = {x: m.x + (r.x - m.x) * k, y: m.y + (r.y - m.y) * k};
+    const mv = moved(t, out);
+    if (mv < bestMove) {
+      bestMove = mv;
+      best = out;
+    }
+  }
+  return best;
+}
+
+/** Apex moved onto the perpendicular bisector of its base; the apex that moves least. */
+function asIsosceles(t: Tri): Tri {
+  let best: Tri = t;
+  let bestMove = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const a = t[i], b = t[(i + 1) % 3], c = t[(i + 2) % 3];
+    const m = mid(b, c);
+    const len = dist(b, c) || 1;
+    const n = {x: -(c.y - b.y) / len, y: (c.x - b.x) / len};
+    const h = (a.x - m.x) * n.x + (a.y - m.y) * n.y;
+    const out = [...t] as Tri;
+    out[i] = {x: m.x + n.x * h, y: m.y + n.y * h};
+    const mv = moved(t, out);
+    if (mv < bestMove) {
+      bestMove = mv;
+      best = out;
+    }
+  }
+  return best;
+}
+
+/** Same centre and mean radius, corners 120° apart, turned to match the drawn ones. */
+function asEquilateral(t: Tri): Tri {
+  const c = {x: (t[0].x + t[1].x + t[2].x) / 3, y: (t[0].y + t[1].y + t[2].y) / 3};
+  const r = (dist(t[0], c) + dist(t[1], c) + dist(t[2], c)) / 3;
+  const order = [...t].sort((a, b) => Math.atan2(a.y - c.y, a.x - c.x) - Math.atan2(b.y - c.y, b.x - c.x));
+  let sx = 0;
+  let sy = 0;
+  order.forEach((p, i) => {
+    const a = Math.atan2(p.y - c.y, p.x - c.x) - (i * 2 * Math.PI) / 3;
+    sx += Math.cos(a);
+    sy += Math.sin(a);
+  });
+  const th = Math.atan2(sy, sx);
+  return [0, 1, 2].map(i => ({
+    x: c.x + r * Math.cos(th + (i * 2 * Math.PI) / 3),
+    y: c.y + r * Math.sin(th + (i * 2 * Math.PI) / 3),
+  })) as Tri;
+}
+
+/** The drawn triangle turned into the closest of the given types (unchanged if none). */
+export function regularTriangle(t: Tri, types: TriangleType[]): Tri {
+  let best: Tri = t;
+  let bestMove = Infinity;
+  for (const type of types) {
+    const out = type === 'right' ? asRight(t) : type === 'isosceles' ? asIsosceles(t) : asEquilateral(t);
+    const mv = type === 'equilateral' ? moved(t, matchOrder(t, out)) : moved(t, out);
+    if (mv < bestMove) {
+      bestMove = mv;
+      best = out;
+    }
+  }
+  return best;
+}
+
+/** `out`'s corners reordered to face `t`'s (nearest first), for measuring the move. */
+function matchOrder(t: Tri, out: Tri): Tri {
+  const left = [...out];
+  return t.map(p => {
+    let k = 0;
+    left.forEach((q, i) => {
+      if (dist(p, q) < dist(p, left[k])) {
+        k = i;
+      }
+    });
+    return left.splice(k, 1)[0];
+  }) as Tri;
+}
+
+export function fitTriangle(
+  loop: P[],
+  snapDegrees = 8,
+  types: TriangleType[] = [],
+): {corners: [P, P, P]; err: number} {
   let h = hull(loop);
   if (h.length > 48) {
     const step = h.length / 48;
@@ -417,6 +519,7 @@ export function fitTriangle(loop: P[], snapDegrees = 8): {corners: [P, P, P]; er
     sum += Math.min(segDist(p, best[0], best[1]), segDist(p, best[1], best[2]), segDist(p, best[2], best[0]));
   }
   const err = sum / loop.length / size;
+  best = regularTriangle(best, types);
   // Straighten: the side closest to the page axes, if within snapDegrees.
   let turn = 0;
   let closest = Infinity;
@@ -509,7 +612,7 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
   // Triangle first: three corners, its sides hugging the loop much better than
   // a rectangle or a circle would.
   if (opts.triangle && corners >= 2 && corners <= 4) {
-    const tri = fitTriangle(loop, opts.triangleSnapDegrees ?? 8);
+    const tri = fitTriangle(loop, opts.triangleSnapDegrees ?? 8, opts.triangleTypes);
     if (tri.err <= 0.035 * k && tri.err < 0.6 * rect.err && tri.err < 0.6 * circle.err) {
       return {shape: {kind: 'triangle', corners: tri.corners}, reason: 'triangle', metrics};
     }

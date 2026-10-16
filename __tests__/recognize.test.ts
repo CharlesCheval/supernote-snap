@@ -1,4 +1,4 @@
-import {P, arrowPoints, recognize, snapDirection, trailingStillCount} from '../src/recognize';
+import {P, TriangleType, arrowPoints, recognize, snapDirection, trailingStillCount} from '../src/recognize';
 
 const opts = {
   tolerance: 3,
@@ -306,6 +306,28 @@ describe('triangles', () => {
     expect(kind(hand(rotateAll(rect(100, 100, 700, 400), 25, {x: 400, y: 250}), 6), tri)).toBe('rect');
     expect(kind(arc(500, 500, 400, 110, 1.02), tri)).not.toBe('triangle');
     expect(kind(hand(arc(300, 300, 45, 45, 1.05), 2), tri)).toBe('circle');
+  });
+  const corners = (pts: P[], types: TriangleType[]) =>
+    (recognize(hand(pts, 4), {...tri, triangleTypes: types, triangleSnapDegrees: 0}).shape as {corners: P[]}).corners;
+  const sides = (c: P[]) =>
+    [0, 1, 2].map(i => Math.hypot(c[i].x - c[(i + 1) % 3].x, c[i].y - c[(i + 1) % 3].y)).sort((a, b) => a - b);
+  const scalene = triangle({x: 380, y: 120}, {x: 720, y: 600}, {x: 100, y: 560});
+  test('equilateral only: every triangle becomes equilateral', () => {
+    const s3 = sides(corners(scalene, ['equilateral']));
+    expect(s3[2] - s3[0]).toBeLessThan(1);
+  });
+  test('isosceles: two equal sides', () => {
+    const s3 = sides(corners(scalene, ['isosceles']));
+    expect(Math.min(s3[1] - s3[0], s3[2] - s3[1])).toBeLessThan(1);
+  });
+  test('right: Pythagoras holds', () => {
+    const s3 = sides(corners(scalene, ['right']));
+    expect(Math.abs(s3[0] ** 2 + s3[1] ** 2 - s3[2] ** 2) / s3[2] ** 2).toBeLessThan(0.01);
+  });
+  test('several types: the closest one', () => {
+    const nearRight = triangle({x: 110, y: 100}, {x: 100, y: 600}, {x: 700, y: 610});
+    const s3 = sides(corners(nearRight, ['right', 'equilateral']));
+    expect(Math.abs(s3[0] ** 2 + s3[1] ** 2 - s3[2] ** 2) / s3[2] ** 2).toBeLessThan(0.01);
   });
   test('triangle off: not recognised', () =>
     expect(kind(hand(triangle({x: 400, y: 100}, {x: 700, y: 600}, {x: 100, y: 600}), 6))).toBeNull());

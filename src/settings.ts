@@ -20,6 +20,13 @@ export type Settings = {
   triangle: boolean;
   /** Triangles with a side within this angle of the page axes are turned square to it (0 = never). */
   triangleSnapDegrees: number;
+  /**
+   * Triangle types every triangle is drawn as (the closest one ticked):
+   * right, isosceles, equilateral. None ticked: any triangle, as drawn.
+   */
+  triangleRight: boolean;
+  triangleIsosceles: boolean;
+  triangleEquilateral: boolean;
   circle: boolean;
   /** Straight arrow: a shaft with a small head drawn at its end, in one stroke. */
   arrow: boolean;
@@ -67,6 +74,9 @@ export const DEFAULTS: Settings = {
   rectSnapDegrees: 8,
   triangle: true,
   triangleSnapDegrees: 8,
+  triangleRight: false,
+  triangleIsosceles: false,
+  triangleEquilateral: false,
   circle: true,
   arrow: true,
   arrowSnapDegrees: 8,
