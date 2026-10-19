@@ -225,7 +225,6 @@ const SHAPE_SETTINGS: {k: ShapeKey; chips: ChipSpec[]}[] = [
     chips: [
       {label: 'Straighten', k: 'axesSnapDegrees', unit: '°'},
       {label: 'Head', k: 'axesHeadPct', unit: '%'},
-      {label: 'Tick width', k: 'axesTickWidthPct', unit: '%'},
       {label: 'Tick every', k: 'axesTickMm', unit: ' mm'},
     ],
   },

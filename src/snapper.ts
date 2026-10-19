@@ -223,34 +223,24 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): obje
     case 'sqrt':
       return [polyline(shape.points, lasso)];
     case 'axes': {
-      // Each axis: the line with its filled head, then its ticks as a separate,
-      // thinner polyline (drawn out and back across the axis, travelling along it
-      // underneath, where the thicker axis hides it).
       const axisHead = (head * HEAD_SCALE * look.axesHeadPct) / 100;
       const tick = Math.max(8, (2 * base.penWidth) / 100);
-      const tickWidth = (base.penWidth * look.axesTickWidthPct) / 100;
-      const out: object[] = [];
+      // ONE polyline for the whole axes, ticks included, so the lasso put on it
+      // takes everything and moves it together (separate pieces were left
+      // behind). Each axis: its ticks (drawn out and back across the axis,
+      // travelling along it), its line and filled head, then back to the
+      // origin over the axis (tip, then along the shaft: drawn over itself,
+      // unseen). One polyline has one width: the ticks take the axes' width.
+      const path: P[] = [];
       for (const end of [shape.xEnd, shape.yEnd]) {
         const ticks = axisPoints(shape.origin, end, look.axesTickMm * PX_PER_MM, tick, axisHead).slice(0, -1);
         if (look.axesTicks && ticks.length > 1) {
-          out.push(polyline(ticks, false, tickWidth));
+          path.push(...ticks);
         }
+        path.push(...arrowPoints(shape.origin, end, axisHead, fill), end);
       }
-      // Both axes as ONE polyline, inserted last, so the lasso put on it takes
-      // the whole axes (the lasso redraws the area: no remnant of the deleted
-      // stroke). From the x head it runs back to the origin over the x axis
-      // (tip, then along the shaft: drawn over itself, unseen).
-      out.push(
-        polyline(
-          [
-            ...arrowPoints(shape.origin, shape.xEnd, axisHead, fill),
-            shape.xEnd,
-            ...arrowPoints(shape.origin, shape.yEnd, axisHead, fill),
-          ],
-          lasso,
-        ),
-      );
-      return out;
+      // The last point (the y tip) is dropped: nothing follows it.
+      return [polyline(path.slice(0, -1), lasso)];
     }
     case 'circle':
       return [
