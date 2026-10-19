@@ -231,13 +231,25 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): obje
       const tickWidth = (base.penWidth * look.axesTickWidthPct) / 100;
       const out: object[] = [];
       for (const end of [shape.xEnd, shape.yEnd]) {
-        // No lasso: it would only select one of the pieces.
-        out.push(polyline(arrowPoints(shape.origin, end, axisHead, fill), false));
         const ticks = axisPoints(shape.origin, end, look.axesTickMm * PX_PER_MM, tick, axisHead).slice(0, -1);
         if (look.axesTicks && ticks.length > 1) {
           out.push(polyline(ticks, false, tickWidth));
         }
       }
+      // Both axes as ONE polyline, inserted last, so the lasso put on it takes
+      // the whole axes (the lasso redraws the area: no remnant of the deleted
+      // stroke). From the x head it runs back to the origin over the x axis
+      // (tip, then along the shaft: drawn over itself, unseen).
+      out.push(
+        polyline(
+          [
+            ...arrowPoints(shape.origin, shape.xEnd, axisHead, fill),
+            shape.xEnd,
+            ...arrowPoints(shape.origin, shape.yEnd, axisHead, fill),
+          ],
+          lasso,
+        ),
+      );
       return out;
     }
     case 'circle':
