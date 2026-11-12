@@ -56,41 +56,6 @@ export function subscribeMeasures(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** DIAGNOSTIC BUILD: coordinates of the last shape attempt, shown in the settings. */
-export let lastDiag: string[] = [];
-
-const bboxText = (pts: P[]) => {
-  if (!pts.length) {
-    return 'no points';
-  }
-  const xs = pts.map(p => p.x);
-  const ys = pts.map(p => p.y);
-  const r = Math.round;
-  const mn = (v: number[]) => r(v.reduce((a, b) => Math.min(a, b), Infinity));
-  const mx = (v: number[]) => r(v.reduce((a, b) => Math.max(a, b), -Infinity));
-  return `x ${mn(xs)}–${mx(xs)}, y ${mn(ys)}–${mx(ys)}`;
-};
-
-/** The points a shape is drawn through, for its bounding box. */
-function shapePoints(shape: Shape): P[] {
-  switch (shape.kind) {
-    case 'circle':
-      return [
-        {x: shape.cx - shape.r, y: shape.cy - shape.r},
-        {x: shape.cx + shape.r, y: shape.cy + shape.r},
-      ];
-    case 'rect':
-    case 'triangle':
-      return [...shape.corners];
-    case 'arrow':
-      return [shape.tail, shape.tip];
-    case 'axes':
-      return [shape.origin, shape.xEnd, shape.yEnd];
-    default:
-      return 'points' in shape ? shape.points : [];
-  }
-}
-
 function report(m: Omit<Measure, 'at'>) {
   lastMeasure = {...m, at: Date.now()};
   listeners.forEach(fn => fn());
@@ -572,25 +537,6 @@ async function handleStroke(el: Element) {
   let shape: Shape | null = null;
   let extent = Infinity;
   const sets = await pointSets(el, size);
-  // DIAGNOSTIC: sizes reported by the host and each source's bounding box.
-  const diag: string[] = [];
-  try {
-    const path = ok<string>(await PluginCommAPI.getCurrentFilePath());
-    const own = path ? ok<Size>(await PluginFileAPI.getPageSize(path, el.pageNum)) : null;
-    const disp = ok<Size>(await PluginCommAPI.getPageDisplaySize());
-    diag.push(`page ${own ? `${own.width}×${own.height}` : '?'} · display ${disp ? `${disp.width}×${disp.height}` : '?'}`);
-    for (const set of sets) {
-      diag.push(`${set.label}: ${bboxText(set.points)}`);
-    }
-    const shown = convertible(disp);
-    if (shown) {
-      const emr = await stroke.points.getRange(0, size);
-      diag.push(`emr→px with display ${shown.width}×${shown.height}: ${bboxText(emr.map(p => PointUtils.emrPoint2Android(p, shown)))}`);
-    }
-  } catch (e: any) {
-    diag.push(`diag error: ${e?.message ?? e}`);
-  }
-  lastDiag = diag;
   for (const set of sets) {
     if (set.points.length) {
       const xs = set.points.map(p => p.x);
@@ -619,7 +565,6 @@ async function handleStroke(el: Element) {
     details.push(describe(set.label, r));
     if (r.shape) {
       shape = shapeToPixels(r.shape, set.toPixel);
-      lastDiag = [...diag, `used ${set.label} → ${shape.kind} ${bboxText(shapePoints(shape))}`];
       break;
     }
     if (r.reason.startsWith('too small')) {

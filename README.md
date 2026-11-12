@@ -83,7 +83,7 @@ npx jest
 
 ## Releasing
 
-Bump `versionName` **and** `versionCode` in `PluginConfig.json` (the device only upgrades when `versionCode` increases), commit, then push a matching tag (`git tag v<versionName> && git push origin v<versionName>`), or run the **Release** workflow by hand on `main` (Actions → Release → Run workflow): the tag is then made from `versionName`.
+Bump `versionName` **and** `versionCode` in `PluginConfig.json` (the device only upgrades when `versionCode` increases), commit, then push a matching tag (`git tag v<versionName> && git push origin v<versionName>`), or run the **Release** workflow by hand on `main` (Actions → Release → Run workflow): the tag is then made from `versionName`. Update `RELEASE_NOTES.md` first: it becomes the release's description.
 
 GitHub Actions runs the tests, builds the plugin and attaches it to the release as `Snap.snplg`.
 

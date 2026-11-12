@@ -41,4 +41,6 @@ jobs:
           tag_name: ${{ steps.tag.outputs.name }}
           target_commitish: ${{ github.sha }}
           files: build/outputs/Snap.snplg
+          # What's new, kept in the repository and updated with each version.
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
