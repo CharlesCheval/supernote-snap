@@ -337,6 +337,18 @@ describe('triangles', () => {
     const nearRight = triangle({x: 110, y: 100}, {x: 100, y: 600}, {x: 700, y: 610});
     expect(pyth(sides(corners(nearRight, ['any', 'right'])))).toBeLessThan(0.01);
   });
+  test('wide, flat rectangles are not triangles (reported)', () => {
+    for (const [w, h, amp, seed] of [
+      [700, 60, 5, 3],
+      [1000, 60, 5, 7],
+      [1000, 90, 5, 11],
+      [400, 60, 9, 3],
+      [700, 90, 9, 19],
+    ]) {
+      const pts = polyline([{x: 100, y: 300}, {x: 100 + w, y: 300}, {x: 100 + w, y: 300 + h}, {x: 100, y: 300 + h}, {x: 100 + 0.03 * w, y: 300}], Math.round(w / 10));
+      expect(kind(hand(pts, amp, seed), {...tri, tolerance: 5})).toBe('rect');
+    }
+  });
   test('triangle off: not recognised', () =>
     expect(kind(hand(triangle({x: 400, y: 100}, {x: 700, y: 600}, {x: 100, y: 600}), 6))).toBeNull());
 });

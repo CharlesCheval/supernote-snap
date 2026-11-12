@@ -269,6 +269,14 @@ function ShapeRow({k, chips}: {k: ShapeKey; chips: ChipSpec[]}) {
             </View>
           </View>
         ) : null}
+        {k === 'circle' ? (
+          <Switch
+            label="Centre dot"
+            value={s.circleCentre ? 'On' : 'Off'}
+            on={s.circleCentre}
+            onPress={() => updateSettings({circleCentre: !s.circleCentre})}
+          />
+        ) : null}
         {k === 'axes' ? (
           <Switch
             label="Ticks"

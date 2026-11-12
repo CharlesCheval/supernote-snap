@@ -304,3 +304,21 @@ export function axisPoints(origin: P, end: P, spacing: number, tick: number, hea
   pts.push(end);
   return pts;
 }
+
+/**
+ * A solid dot: a spiral from the centre, rings closer than the line width so
+ * they merge (geometries cannot be filled). About twice the pen line wide.
+ */
+export function dotPoints(c: P, penWidth: number, spacing: number): P[] {
+  const line = penWidth / 100; // about 100 width units per pixel of line
+  const radius = Math.max(3, line);
+  const pts: P[] = [{x: c.x, y: c.y}];
+  const rings = Math.max(1, Math.ceil(radius / spacing));
+  const steps = rings * 16;
+  for (let i = 1; i <= steps; i++) {
+    const a = (i / 16) * 2 * Math.PI;
+    const r = (radius * i) / steps;
+    pts.push({x: c.x + r * Math.cos(a), y: c.y + r * Math.sin(a)});
+  }
+  return pts;
+}

@@ -1,5 +1,5 @@
 import {P, recognize} from '../src/recognize';
-import {braceOutline} from '../src/symbols';
+import {braceOutline, dotPoints} from '../src/symbols';
 
 const opts = {
   tolerance: 3,
@@ -181,4 +181,15 @@ describe('real drawings', () => {
     expect(kind(real(pts))).toBe('sqrt');
     expect(kind(real(pts), {...opts, triangle: true})).toBe('sqrt');
   });
+});
+
+test('centre dot: a spiral from the centre, rings closer than the fill spacing', () => {
+  const pts = dotPoints({x: 500, y: 500}, 600, 2.4);
+  expect(pts[0]).toEqual({x: 500, y: 500});
+  const radii = pts.map(p => Math.hypot(p.x - 500, p.y - 500));
+  expect(Math.max(...radii)).toBeCloseTo(6, 5); // the pen line width (6 px), at least 3 px
+  // Consecutive turns (16 points each) are less than the spacing apart.
+  for (let i = 16; i < radii.length; i++) {
+    expect(radii[i] - radii[i - 16]).toBeLessThanOrEqual(2.4 + 1e-9);
+  }
 });

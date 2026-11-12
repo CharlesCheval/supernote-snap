@@ -2,7 +2,7 @@ import {Element, PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, Poi
 import {isInk, strokeOrigin} from './guard';
 import {HoldTracker, PenMotion} from './hold';
 import {P, Recognition, Shape, arrowPoints, recognize, trailingStillCount} from './recognize';
-import {axisPoints} from './symbols';
+import {axisPoints, dotPoints} from './symbols';
 import {getSettings} from './settings';
 
 /**
@@ -78,14 +78,33 @@ type Size = {width: number; height: number};
 
 const validSize = (s: any): s is Size => s && s.width > 1 && s.height > 1;
 
-/** Page size in pixels, used to convert EMR points. Integer values are required by PointUtils. */
-async function pageSize(page: number): Promise<Size | null> {
-  let size = ok<Size>(await PluginCommAPI.getPageDisplaySize());
-  if (!validSize(size)) {
-    const path = ok<string>(await PluginCommAPI.getCurrentFilePath());
-    size = path ? ok<Size>(await PluginFileAPI.getPageSize(path, page)) : null;
+/** A size PointUtils can convert EMR points with (it throws on sizes it does not know). */
+function convertible(s: Size | null): Size | null {
+  if (!validSize(s)) {
+    return null;
   }
-  return validSize(size) ? {width: Math.round(size.width), height: Math.round(size.height)} : null;
+  const size = {width: Math.round(s.width), height: Math.round(s.height)};
+  try {
+    PointUtils.getRealMaxX(size);
+    PointUtils.getRealMaxY(size);
+    return size;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Page size in pixels, used to convert EMR points. The page's own size first
+ * (PluginFileAPI.getPageSize, as Ratta asks for coordinate conversion): the
+ * display size differs from it when a page made for another device is shown
+ * (on a Manta, an A5X-sized page: shapes came out about 37 % too large and
+ * shifted, reported). The display size only when the page size is missing or
+ * not one PointUtils can convert.
+ */
+async function pageSize(page: number): Promise<Size | null> {
+  const path = ok<string>(await PluginCommAPI.getCurrentFilePath());
+  const own = path ? convertible(ok<Size>(await PluginFileAPI.getPageSize(path, page))) : null;
+  return own ?? convertible(ok<Size>(await PluginCommAPI.getPageDisplaySize()));
 }
 
 /**
@@ -187,6 +206,7 @@ const PX_PER_MM = 300 / 25.4;
 type Pen = {type: number; color: number; width: number};
 
 type Look = {
+  circleCentre: boolean;
   arrowHeadPct: number;
   axesHeadPct: number;
   axesTicks: boolean;
@@ -242,8 +262,11 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): obje
       // The last point (the y tip) is dropped: nothing follows it.
       return [polyline(path.slice(0, -1), lasso)];
     }
-    case 'circle':
+    case 'circle': {
+      // The centre dot first, so the lasso stays on the circle, inserted last.
+      const dot = look.circleCentre ? [polyline(dotPoints({x: shape.cx, y: shape.cy}, base.penWidth, fill), false)] : [];
       return [
+        ...dot,
         {
           ...base,
           showLassoAfterInsert: lasso,
@@ -255,6 +278,7 @@ function geometriesFor(shape: Shape, pen: Pen, lasso: boolean, look: Look): obje
           ellipseAngle: 0,
         },
       ];
+    }
     case 'rect':
     case 'triangle':
       return [polyline([...shape.corners, shape.corners[0]], lasso)];

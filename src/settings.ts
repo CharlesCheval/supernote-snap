@@ -42,6 +42,8 @@ export type Settings = {
   brace: boolean;
   /** Square root sign, its bar as long as drawn. */
   sqrt: boolean;
+  /** A dot at the centre of every circle (unit circles in trigonometry). */
+  circleCentre: boolean;
   /** Coordinate axes, drawn as an "L". */
   axes: boolean;
   /** Axes arrow head size, percent of the size set by the pen width. */
@@ -81,6 +83,7 @@ export const DEFAULTS: Settings = {
   triangleIsosceles: false,
   triangleEquilateral: true,
   circle: true,
+  circleCentre: false,
   arrow: true,
   arrowSnapDegrees: 8,
   axesSnapDegrees: 8,

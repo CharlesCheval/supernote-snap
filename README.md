@@ -12,7 +12,7 @@ Draw a **rectangle**, a **triangle**, a **circle**, an **arrow**, a **curly brac
 
 - **Pen style:** it uses the active pen (type, color, width).
 - **Resizing:** the shape appears lasso-selected, ready to be moved or resized (in notes, axes included; not in PDFs, see below).
-- **Circles:** always perfect, even from a slightly oval stroke. Ellipses are never created.
+- **Circles:** always perfect, even from a slightly oval stroke. Ellipses are never created. Optional **centre dot** (off by default), for unit circles: a separate small dot, not taken by the circle's lasso.
 - **Rectangles:** strokes tilted less than 8° (setting) are snapped to the page axes. Beyond that, the rectangle keeps its tilt. Long, thin rectangles are recognised too.
 - **Triangles:** any three corners. A triangle with a side within 12° (setting) of the page axes is turned square to it. **Types**: any, right, isosceles, equilateral. By default only equilateral is ticked: every triangle comes out equilateral. Without **Any**, every triangle is drawn as the closest ticked type; with **Any**, a triangle stays as drawn unless it is close to a ticked type.
 - **Tiny shapes:** circles and rectangles down to about 1 mm, but only after a 300 ms pause at the end (under about 5 mm), so that an "o" or a "0" written at speed stays ink.
@@ -32,7 +32,8 @@ One page, no scrolling. The **On / Off** switch in the header turns Snap off alt
 |---|---|
 | Rectangle | **Straighten**: tilted less than this, it is set square to the page (0–20°, default 8°) |
 | Triangle | **Straighten** (0–20°, default 12°) · **Types**: any, right, isosceles, equilateral (default: equilateral only) |
-| Circle, brace, square root | — |
+| Circle | **Centre dot**: On or Off (default Off) |
+| Brace, square root | — |
 | Arrow | **Straighten** (0–20°, default 8°) · **Head**: head size, % of the size set by the pen width (30–200 %, default 100 %) |
 | Axes | **Straighten** (0–20°, default 8°) · **Head** (as for arrows) · **Ticks**: On or Off · **Tick every**: spacing in mm (2–20, default 5) |
 
@@ -49,7 +50,7 @@ All settings are saved and survive restarts and updates (one small folder per se
   - The stroke is resampled, and any overshoot past the starting point is cut off.
   - Sharp corners are counted along the loop.
   - A circle (least squares) and a minimum-area rectangle are fitted to the loop.
-  - It is a triangle if there are 2 to 4 corners, the largest triangle on the loop's convex hull hugs it much better than a rectangle or a circle, and what was cut as overshoot stays along the loop (a square root's bar runs away from it: its entry and rise, closed by the cut, would otherwise make a triangle).
+  - It is a triangle if there are 2 to 4 corners, the largest triangle on the loop's convex hull hugs it much better than a rectangle or a circle and covers at least 3/4 of its area (a wide, flat rectangle hugs a flat triangle closely too, but the triangle covers only half of it), and what was cut as overshoot stays along the loop (a square root's bar runs away from it: its entry and rise, closed by the cut, would otherwise make a triangle).
   - It is a rectangle if there are about 4 corners and a small rectangle error. It is a circle if there are no corners and a small circle error.
   - Otherwise, open shapes are tried in turn (`src/symbols.ts` for the maths ones):
     - brace: the stroke bulges to one side of its start → end chord (depth 6–40% of its length) and has a sharp feature in the middle (40–60% of the length) with smooth arms: a textbook point, a notch between two "(" arcs, or the vertex of a quick "<". An arc "(" (no sharp middle), an "S" (both sides) and a "W" (sharp arms) are rejected;
@@ -62,7 +63,7 @@ All settings are saved and survive restarts and updates (one small folder per se
 - **PDFs:** there the lasso put on a new shape misled the lasso APIs (Palette read the shape at the wrong place), so shapes are never selected.
 - If the file or page changes while a stroke is being processed, the plugin cancels without editing anything.
 - **Lasso tool:** the host sends lasso paths through the same pen-up event, as a stroke with `penType` 4 (measured on a Manta, undocumented). While the lasso tool is active, the lasso APIs (`getLassoRect`…) answer "not allowed" (code 102), so they cannot detect it. Snap therefore only touches strokes drawn with a known ink pen (`penType` 1, 10, 11, 15 from the SDK, and 16 for the ink pen, measured; `src/guard.ts`); anything else is ignored. As a second guard, a stroke is also ignored when a lasso selection exists when the pen lifts. The plugin never drives the lasso itself.
-- **Point sources:** points are read in page pixels, then as raw pen (EMR) coordinates, which do not depend on the reported page size (zoom, landscape).
+- **Point sources:** points are read in page pixels, then as raw pen (EMR) coordinates, which do not depend on the reported page size (zoom, landscape). EMR points are converted with the page's own size (`PluginFileAPI.getPageSize`, as Ratta asks), which differs from the display size when a page made for another device is shown (an A5X-sized page on a Manta made shapes about 37 % too large); the display size is used only when the page size is missing or unknown to the SDK's converter.
 - **Timeout:** each stroke is processed within 8 s, so a stuck host call can never block the following strokes.
 - **Arrow heads** are 70 % of the former size at the default 100 % head setting.
 

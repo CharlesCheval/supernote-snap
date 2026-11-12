@@ -503,7 +503,7 @@ export function fitTriangle(
   loop: P[],
   snapDegrees = 8,
   types: TriangleType[] = [],
-): {corners: [P, P, P]; err: number} {
+): {corners: [P, P, P]; err: number; fill: number} {
   let h = hull(loop);
   if (h.length > 48) {
     const step = h.length / 48;
@@ -553,7 +553,17 @@ export function fitTriangle(
     x: cx + (p.x - cx) * Math.cos(turn) - (p.y - cy) * Math.sin(turn),
     y: cy + (p.x - cx) * Math.sin(turn) + (p.y - cy) * Math.cos(turn),
   });
-  return {corners: [rot(best[0]), rot(best[1]), rot(best[2])], err};
+  // How much of the loop's area the fitted triangle covers (computed before any
+  // regularisation): about 1 for a triangle, about 1/2 for a rectangle (the
+  // largest triangle inside it).
+  let loopArea = 0;
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[i];
+    const b = loop[(i + 1) % loop.length];
+    loopArea += a.x * b.y - b.x * a.y;
+  }
+  const fill = bestArea / Math.max(1, Math.abs(loopArea));
+  return {corners: [rot(best[0]), rot(best[1]), rot(best[2])], err, fill};
 }
 
 export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
@@ -636,7 +646,9 @@ export function recognize(raw: P[], opts: RecognizeOptions): Recognition {
   // a rectangle or a circle would.
   if (opts.triangle && corners >= 2 && corners <= 4 && tailAway <= 0.12) {
     const tri = fitTriangle(loop, opts.triangleSnapDegrees ?? 8, opts.triangleTypes);
-    if (tri.err <= 0.035 * k && tri.err < 0.6 * rect.err && tri.err < 0.6 * circle.err) {
+    // A wide, flat rectangle hugs a flat triangle closely too (its error is
+    // relative to the width): the triangle must also cover most of its area.
+    if (tri.err <= 0.035 * k && tri.err < 0.6 * rect.err && tri.err < 0.6 * circle.err && tri.fill >= 0.75) {
       return {shape: {kind: 'triangle', corners: tri.corners}, reason: 'triangle', metrics};
     }
   }
