@@ -20,6 +20,7 @@ import {
   updateSettings,
 } from './src/settings';
 import {lastMeasure, subscribeMeasures} from './src/snapper';
+import {events, strokeTraces, traceText} from './src/trace';
 
 type NumKey = keyof typeof LIMITS;
 
@@ -333,11 +334,13 @@ function App(): React.JSX.Element {
         <Chip label="Hold" k="holdMs" unit=" ms" />
         <Chip label="Stillness" k="stillRadius" unit=" px" />
         <Chip label="Tolerance" k="tolerance" unit=" / 5" />
+        <Chip label="Ink pen width" k="inkWidthPct" unit="%" />
       </View>
       <Text style={styles.explain}>
         Hold: pause at the end of the stroke (0 = on lift) · Stillness: jitter
         allowed during it · Tolerance: 1 neat, 5 lenient. Shapes under 5 mm
-        always need the pause.
+        always need the pause. Ink pen width: line width of shapes drawn
+        with the Ink pen, percent of its tip size.
       </Text>
 
       <View style={styles.footer}>
@@ -350,6 +353,42 @@ function App(): React.JSX.Element {
           <Text style={styles.resetText}>Reset to defaults</Text>
         </Pressable>
       </View>
+      <Text style={styles.section}>Diagnostics</Text>
+      <View style={styles.detection}>
+        <Switch
+          label="Diagnostics"
+          value={s.diagnostics ? 'On' : 'Off'}
+          on={s.diagnostics}
+          onPress={() => updateSettings({diagnostics: !s.diagnostics})}
+        />
+        <View style={!s.diagnostics && styles.dim}>
+          <Switch
+            label="Page text"
+            value={s.pageText ? 'On' : 'Off'}
+            on={s.pageText}
+            onPress={() => s.diagnostics && updateSettings({pageText: !s.pageText})}
+          />
+        </View>
+      </View>
+      <Text style={styles.explain}>
+        Diagnostics: record every stroke and show the last ones below · Page
+        text: also write each snap attempt on the page (use a test page).
+      </Text>
+      {s.diagnostics ? (
+        <View>
+          <Pressable style={styles.reset} onPress={refresh}>
+            <Text style={styles.resetText}>Refresh diagnostics</Text>
+          </Pressable>
+          <Text style={styles.diagHead}>Pen-up events (newest first)</Text>
+          <Text style={styles.diag}>{events.length ? events.join('\n') : 'none since diagnostics were turned on'}</Text>
+          {strokeTraces.map((tr, i) => (
+            <View key={tr.start + '-' + i}>
+              <Text style={styles.diagHead}>{`Stroke ${i + 1} (newest first)`}</Text>
+              <Text style={styles.diag}>{traceText(tr)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -517,6 +556,8 @@ const styles = StyleSheet.create({
   },
   resetText: {fontSize: 16, color: '#444444'},
   measure: {flex: 1, fontSize: 18, color: '#000000', marginRight: 16},
+  diagHead: {fontSize: 16, fontWeight: 'bold', color: '#000000', marginTop: 14},
+  diag: {fontSize: 13, color: '#000000', fontFamily: 'monospace'},
 });
 
 export default App;

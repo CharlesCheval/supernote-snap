@@ -38,6 +38,12 @@ export type Settings = {
   axesSnapDegrees: number;
   /** Arrow head size, percent of the size set by the pen width. */
   arrowHeadPct: number;
+  /**
+   * Ink pen (pressure pen) shapes are drawn as fixed-width lines at this percent of the
+   * pen width: a pressure-pen geometry renders at about 3 px whatever its width (measured,
+   * Manta: 800 and 1200 both 3 px), while ink handwriting is about 5–6 px.
+   */
+  inkWidthPct: number;
   /** Curly brace, in any of the four directions. */
   brace: boolean;
   /** Square root sign, its bar as long as drawn. */
@@ -54,6 +60,10 @@ export type Settings = {
   axesTickMm: number;
   /** Lasso-select the shape right after creating it (to resize it). */
   lassoAfter: boolean;
+  /** Record a trace of every stroke and show it on the settings screen. */
+  diagnostics: boolean;
+  /** With diagnostics on: also write each snap attempt's trace on the page as a text box. */
+  pageText: boolean;
   /**
    * What happens to the hand-drawn stroke once the shape is inserted:
    * number = deleted by element number (works over writing, but resets undo history) ·
@@ -85,6 +95,7 @@ export const DEFAULTS: Settings = {
   arrowSnapDegrees: 8,
   axesSnapDegrees: 8,
   arrowHeadPct: 100,
+  inkWidthPct: 50,
   brace: true,
   sqrt: true,
   axes: true,
@@ -93,6 +104,8 @@ export const DEFAULTS: Settings = {
   axesTickWidthPct: 50,
   axesTickMm: 5,
   lassoAfter: true,
+  diagnostics: false,
+  pageText: false,
   replaceMode: 'number',
 };
 
@@ -105,6 +118,7 @@ export const LIMITS = {
   triangleSnapDegrees: {min: 0, max: 20, step: 1},
   axesSnapDegrees: {min: 0, max: 20, step: 1},
   arrowHeadPct: {min: 30, max: 200, step: 10},
+  inkWidthPct: {min: 20, max: 150, step: 5},
   axesHeadPct: {min: 30, max: 200, step: 10},
   axesTickWidthPct: {min: 20, max: 100, step: 10},
   axesTickMm: {min: 2, max: 20, step: 1},

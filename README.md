@@ -10,7 +10,7 @@ Formerly **ShapeSnap**.
 
 Draw a **rectangle**, a **triangle**, a **circle**, an **arrow**, a **curly brace**, a **square root** or **coordinate axes** and hold the pen still for a moment (350 ms by default). The stroke is replaced by a perfect shape:
 
-- **Pen style:** it uses the active pen (type, color, width).
+- **Pen style:** it uses the active pen (type, color, width). Exception: a shape drawn with the Ink pen (pressure pen) is drawn as a fixed-width line at **Ink pen width** % of the pen width, because a pressure-pen geometry renders about 3 px wide whatever its width (measured on a Manta: widths 800 and 1200 both gave 3 px, while ink handwriting at those tips is 5–6 px).
 - **Resizing:** the shape appears lasso-selected, ready to be moved or resized (in notes, axes included; not in PDFs, see below).
 - **Circles:** always perfect, even from a slightly oval stroke. Ellipses are never created.
 - **Rectangles:** strokes tilted less than 8° (setting) are snapped to the page axes. Beyond that, the rectangle keeps its tilt. Long, thin rectangles are recognised too.
@@ -26,7 +26,7 @@ Its settings open from the plugin menu (the **Snap** button in the side bar) or 
 
 ## Settings
 
-One page, no scrolling. The **On / Off** switch in the header turns Snap off altogether. Then one row per shape (circle, rectangle, triangle, arrow, axes, brace, square root): tap its icon to turn it on (black) or off (grey); its settings sit next to it.
+One page, no scrolling (unless Diagnostics is on). The **On / Off** switch in the header turns Snap off altogether. Then one row per shape (circle, rectangle, triangle, arrow, axes, brace, square root): tap its icon to turn it on (black) or off (grey); its settings sit next to it.
 
 | Shape | Settings |
 |---|---|
@@ -36,9 +36,11 @@ One page, no scrolling. The **On / Off** switch in the header turns Snap off alt
 | Arrow | **Straighten** (0–20°, default 8°) · **Head**: head size, % of the size set by the pen width (30–200 %, default 100 %) |
 | Axes | **Straighten** (0–20°, default 8°) · **Head** (as for arrows) · **Ticks**: On or Off · **Tick every**: spacing in mm (2–20, default 5) |
 
-**Detection**, on one row: **Hold** (pause required at the end of the stroke, 0–1000 ms, default 350; 0 snaps as soon as the pen lifts), **Stillness** (jitter allowed during the hold, default 12 px), **Tolerance** (1 strict to 5 lenient, default 5).
+**Detection**, on one row: **Hold** (pause required at the end of the stroke, 0–1000 ms, default 350; 0 snaps as soon as the pen lifts), **Stillness** (jitter allowed during the hold, default 12 px), **Tolerance** (1 strict to 5 lenient, default 5), **Ink pen width** (line width of shapes drawn with the Ink pen, % of its width, 20–150 %, default 50 %).
 
 All settings are saved and survive restarts and updates (one small folder per setting in the plugin directory: the SDK cannot write text files). A **Last stroke** line at the bottom tells what happened to the last stroke, and for a shape how long it took (and why, when it waited for the next stroke to end or had to scan the page).
+
+**Diagnostics** (default Off): when on, Snap records the last 25 pen-up events and a step-by-step trace of the last 6 strokes (settings, pen, measured hold, page size, each point source, recognition, the geometries inserted and the host's responses) and lists them at the bottom of the settings screen. **Page text** (only with Diagnostics on, default Off) also writes each snap attempt's trace on the page as a text box: use a test page.
 
 ## How it works
 
@@ -62,7 +64,7 @@ All settings are saved and survive restarts and updates (one small folder per se
 - **PDFs:** there the lasso put on a new shape misled the lasso APIs (Palette read the shape at the wrong place), so shapes are never selected.
 - If the file or page changes while a stroke is being processed, the plugin cancels without editing anything.
 - **Lasso tool:** the host sends lasso paths through the same pen-up event, as a stroke with `penType` 4 (measured on a Manta, undocumented). While the lasso tool is active, the lasso APIs (`getLassoRect`…) answer "not allowed" (code 102), so they cannot detect it. Snap therefore only touches strokes drawn with a known ink pen (`penType` 1, 10, 11, 15 from the SDK, and 16 for the ink pen, measured; `src/guard.ts`); anything else is ignored. As a second guard, a stroke is also ignored when a lasso selection exists when the pen lifts. The plugin never drives the lasso itself.
-- **Point sources:** points are read in page pixels, then as raw pen (EMR) coordinates, which do not depend on the reported page size (zoom, landscape).
+- **Point sources:** points are read in page pixels, then as raw pen (EMR) coordinates, which do not depend on the reported page size (zoom, landscape). The page size is the page's own (`PluginFileAPI.getPageSize`, as sn-plugin-lib 0.2.x recommends over the deprecated `getPageDisplaySize`), with the display size only as a fallback.
 - **Timeout:** each stroke is processed within 8 s, so a stuck host call can never block the following strokes.
 - **Arrow heads** are 70 % of the former size at the default 100 % head setting.
 

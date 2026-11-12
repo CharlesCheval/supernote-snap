@@ -7,7 +7,7 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "build": "./buildPlugin.sh",
+    "build": "node buildPlugin.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

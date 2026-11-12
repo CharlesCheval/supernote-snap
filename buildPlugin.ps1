@@ -1138,7 +1138,7 @@ function Main {
     Test-OperatingSystem
 
     $selfCheckOk = Self-CheckScriptIntegrity -ScriptPath $PSCommandPath
-    if (-not $selfCheckOk) { return }
+    if (-not $selfCheckOk) { exit 1 }
     
     # Set project root directory to current directory
     $projectRoot = Get-Location
@@ -1162,7 +1162,7 @@ function Main {
     $bundleSuccess = Build-ReactNativeBundle -ProjectRoot $projectRoot -ProjectName $projectName -OutputDir $buildGeneratedDir
     if (-not $bundleSuccess) {
         Write-ColorOutput 'React Native bundling failed, script terminated' 'Red'
-        return
+        exit 1
     }
     
     # Step 3: Check if PluginConfig.json file exists in root directory
@@ -1244,19 +1244,19 @@ function Main {
     $buildOutputsDir = New-BuildOutputsDirectory -ProjectRoot $projectRoot
     if (-not $buildOutputsDir) {
         Write-ColorOutput 'Unable to create build/outputs directory, skipping packaging step' 'Red'
-        return
+        exit 1
     }
     
     # Check if build/generated directory exists and is not empty
     if (-not (Test-Path $buildGeneratedDir)) {
         Write-ColorOutput 'build/generated directory does not exist, cannot package' 'Red'
-        return
+        exit 1
     }
     
     $generatedItems = Get-ChildItem -Path $buildGeneratedDir -Recurse
     if ($generatedItems.Count -eq 0) {
         Write-ColorOutput 'build/generated directory is empty, cannot package' 'Yellow'
-        return
+        exit 1
     }
     
     # Create temporary zip file
@@ -1267,7 +1267,7 @@ function Main {
     $zipResult = New-ZipPackage -SourceDir $buildGeneratedDir -DestinationPath $tempZipPath
     if (-not $zipResult) {
         Write-ColorOutput 'Packaging failed, unable to create zip file' 'Red'
-        return
+        exit 1
     }
     
     # Rename to .snplg file
@@ -1283,6 +1283,7 @@ function Main {
         Write-ColorOutput "File size: $fileSizeMB MB" 'Blue'
     } else {
         Write-ColorOutput 'Failed to rename to .snplg file' 'Red'
+        exit 1
     }
 }
 

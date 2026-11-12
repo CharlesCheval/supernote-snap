@@ -1,3 +1,4 @@
+import {beginTrace, ev, r as rnd, resp, t, writeOnPage} from './trace';
 import {Element, PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, PointUtils} from 'sn-plugin-lib';
 import {isInk, strokeOrigin} from './guard';
 import {HoldTracker, PenMotion} from './hold';
@@ -56,6 +57,8 @@ export function subscribeMeasures(fn: () => void): () => void {
 }
 
 function report(m: Omit<Measure, 'at'>) {
+  t(`RESULT: ${m.result} (hold ${m.stillMs} ms via ${m.holdSource})`);
+  m.details.forEach(d => t(`  ${d}`));
   lastMeasure = {...m, at: Date.now()};
   listeners.forEach(fn => fn());
 }
@@ -80,12 +83,18 @@ const validSize = (s: any): s is Size => s && s.width > 1 && s.height > 1;
 
 /** Page size in pixels, used to convert EMR points. Integer values are required by PointUtils. */
 async function pageSize(page: number): Promise<Size | null> {
-  let size = ok<Size>(await PluginCommAPI.getPageDisplaySize());
-  if (!validSize(size)) {
-    const path = ok<string>(await PluginCommAPI.getCurrentFilePath());
-    size = path ? ok<Size>(await PluginFileAPI.getPageSize(path, page)) : null;
-  }
-  return validSize(size) ? {width: Math.round(size.width), height: Math.round(size.height)} : null;
+  // The page's real pixel size first (sn-plugin-lib 0.2.x deprecates getPageDisplaySize
+  // in favour of PluginFileAPI.getPageSize); the display size only as a fallback.
+  const pathRes: any = await PluginCommAPI.getCurrentFilePath();
+  const path = ok<string>(pathRes);
+  const realRes: any = path ? await PluginFileAPI.getPageSize(path, page) : null;
+  const shownRes: any = await PluginCommAPI.getPageDisplaySize();
+  t(`pageSize(page ${page}): path ${resp(pathRes)} | getPageSize ${resp(realRes)} | getPageDisplaySize ${resp(shownRes)}`);
+  const real = ok<Size>(realRes);
+  const shown = ok<Size>(shownRes);
+  const size = validSize(real) ? real : validSize(shown) ? shown : null;
+  t(`pageSize → ${size ? `${size.width}×${size.height} (${size === real ? 'page' : 'display'})` : 'none'}`);
+  return size ? {width: Math.round(size.width), height: Math.round(size.height)} : null;
 }
 
 /**
@@ -460,9 +469,13 @@ async function handleStroke(el: Element) {
   const startedAt = Date.now();
   const settings = getSettings();
   const stroke = el.stroke;
+  beginTrace(`stroke ${String(el.uuid).slice(0, 8)} page ${el.pageNum} layer ${el.layerNum} #${el.numInPage} type ${el.type}`);
+  t(`settings ${JSON.stringify(settings)}`);
   if (!stroke) {
+    report({stillMs: 0, holdSource: 'clock', result: 'element has no stroke data: ignored', details: []});
     return;
   }
+  t(`pen type ${stroke.penType} color ${stroke.penColor} → ${strokeOrigin(stroke.penType)}`);
   // Lasso paths arrive here too (penType 4): only strokes drawn with an ink pen are touched.
   const origin = strokeOrigin(stroke.penType);
   if (origin !== 'ink') {
@@ -474,6 +487,7 @@ async function handleStroke(el: Element) {
   // no pause at the end of the stroke (most handwriting).
   if (settings.holdMs > 0) {
     const quick = hold.peekRecent(Date.now());
+    t(`hold clock peek: ${quick ?? 'none'} ms (need ${settings.holdMs}); pen down ${hold.penDown}, downs ${hold.downs}`);
     if (quick != null && quick < settings.holdMs) {
       report({stillMs: quick, holdSource: 'clock', result: 'no pause: stroke kept', details: []});
       return;
@@ -484,16 +498,21 @@ async function handleStroke(el: Element) {
     report({stillMs: 0, holdSource: 'clock', result: 'lasso selection active: ignored', details: []});
     return;
   }
+  t('lasso: none');
   const place = await currentPlace();
+  t(`place ${place}`);
   // Pen-downs so far: a higher count later means the user already writes again.
   const downsAtStart = hold.downs;
   const size = await stroke.points.size();
+  t(`sample points: ${size}`);
   if (size < 8) {
+    report({stillMs: 0, holdSource: 'clock', result: `only ${size} points: ignored`, details: []});
     return;
   }
   // Hold of 0 ms: snap as soon as the pen lifts, no need to measure.
   const {stillMs, holdSource} =
     settings.holdMs > 0 ? await measureHold(stroke, size, el.pageNum) : {stillMs: 0, holdSource: 'clock' as const};
+  t(`measured hold: ${stillMs} ms via ${holdSource}`);
   if (stillMs < settings.holdMs) {
     report({stillMs, holdSource, result: 'no pause: stroke kept', details: []});
     return;
@@ -504,7 +523,18 @@ async function handleStroke(el: Element) {
   details.push(`stroke: pen ${stroke.penType}, color ${stroke.penColor}, thickness ${el.thickness}, #${el.numInPage}`);
   let shape: Shape | null = null;
   let extent = Infinity;
-  for (const set of await pointSets(el, size)) {
+  const sets = await pointSets(el, size);
+  for (const set of sets) {
+    if (set.points.length) {
+      const xs = set.points.map(p => p.x);
+      const ys = set.points.map(p => p.y);
+      const f = (v: number[]) => [v.reduce((a, b) => Math.min(a, b), Infinity), v.reduce((a, b) => Math.max(a, b), -Infinity)].map(rnd);
+      t(`source ${set.label}: ${set.points.length} pts, x ${f(xs).join('…')}, y ${f(ys).join('…')}, first ${rnd(xs[0])},${rnd(ys[0])}`);
+    } else {
+      t(`source ${set.label}: no points`);
+    }
+  }
+  for (const set of sets) {
     if (set.points.length) {
       const xs = set.points.map(p => p.x);
       const ys = set.points.map(p => p.y);
@@ -530,6 +560,7 @@ async function handleStroke(el: Element) {
       axes: settings.axes,
     });
     details.push(describe(set.label, r));
+    t(`recognize ${set.label}: ${describe(set.label, r)}`);
     if (r.shape) {
       shape = shapeToPixels(r.shape, set.toPixel);
       break;
@@ -538,8 +569,10 @@ async function handleStroke(el: Element) {
       break; // handwriting: the other source would say the same
     }
   }
+  t(`shape (page px): ${JSON.stringify(shape, (_k, v) => (typeof v === 'number' ? rnd(v) : v))}`.slice(0, 400));
   if (!shape) {
     report({stillMs, holdSource, result: 'pause detected, shape not recognized', details});
+    await writeOnPage(el.pageNum);
     return;
   }
   // A tiny shape needs a pause at the end, even with a hold of 0 ms.
@@ -553,11 +586,19 @@ async function handleStroke(el: Element) {
   }
 
   // Active pen style; fall back to the stroke's own style.
-  const pen = ok<{type: number; color: number; width: number}>(await PluginCommAPI.getPenInfo()) ?? {
+  const penRes: any = await PluginCommAPI.getPenInfo();
+  t(`getPenInfo ${resp(penRes)}`);
+  const activePen = ok<{type: number; color: number; width: number}>(penRes) ?? {
     type: stroke.penType,
     color: stroke.penColor,
     width: 100,
   };
+  // Ink pen (pressure, type 1 or 16): its geometry renders thin whatever the width, so draw
+  // the shape as a needle-point (fixed-width, type 10) line at a share of the ink width.
+  const pen = activePen.type === 16 || activePen.type === 1
+    ? {type: 10, color: activePen.color, width: Math.round((activePen.width * settings.inkWidthPct) / 100)}
+    : activePen;
+  t(`pen used: type ${pen.type}, color ${pen.color}, width ${pen.width}${pen === activePen ? "" : ` (ink pen ${activePen.width} × ${settings.inkWidthPct}%)`}`);
 
   // Never edit a page the user has already left (e.g. after a swipe to another file),
   // nor interfere with a lasso selection made in the meantime.
@@ -576,6 +617,7 @@ async function handleStroke(el: Element) {
   }
   // Remove the stroke first (per setting), then insert the shape; restore the stroke if insertion fails.
   const deletion = await removeStroke(el);
+  t(`removeStroke: ok ${deletion.ok}, removed ${deletion.removed}, ${deletion.how}`);
   details.push(`removal: ${deletion.how}`);
   if (!deletion.ok) {
     report({stillMs, holdSource, result: 'not snapped: the stroke was not found on the page', details});
@@ -599,7 +641,10 @@ async function handleStroke(el: Element) {
   }
   const geometries = geometriesFor(shape, pen, lassoAfter, settings);
   for (const g of geometries) {
-    if (!ok<boolean>(await PluginCommAPI.insertGeometry(g as any))) {
+    const gr: any = await PluginCommAPI.insertGeometry(g as any);
+    t(`insertGeometry ${JSON.stringify(g, (_k, v) => (typeof v === 'number' ? rnd(v) : v))}`.slice(0, 400));
+    t(`  → ${resp(gr)}`);
+    if (!ok<boolean>(gr)) {
       break;
     }
     inserted++;
@@ -612,6 +657,7 @@ async function handleStroke(el: Element) {
       await PluginCommAPI.insertPageElements([el], el.pageNum, el.layerNum);
     }
     report({stillMs, holdSource, result: 'failed: shape not inserted, stroke restored', details});
+    await writeOnPage(el.pageNum);
     return;
   }
   // Without a lasso the host may show the deleted stroke again where the pen
@@ -627,6 +673,7 @@ async function handleStroke(el: Element) {
     /scan/.test(deletion.how) ? 'stroke found by a page scan' : '',
   ].filter(Boolean);
   report({stillMs, holdSource, result: `${CREATED[shape.kind]} (${timing.join(' · ')})`, details});
+  await writeOnPage(el.pageNum);
 }
 
 const TRIANGLE_TYPES = [
@@ -662,6 +709,7 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 
 function onPenUp(msg: unknown) {
   const elements = (Array.isArray(msg) ? msg : []) as Element[];
+  ev(`pen-up: ${Array.isArray(msg) ? elements.length : 'non-array ' + typeof msg} el, types [${elements.map(e => e?.type).join(',')}], enabled ${getSettings().enabled}, busy ${busy ? Date.now() - busy.since + ' ms' : 'no'}`);
   const release = () => elements.forEach(e => e?.uuid && PluginCommAPI.recycleElement(e.uuid));
   if (!getSettings().enabled || !elements.length) {
     release();
@@ -685,9 +733,10 @@ function onPenUp(msg: unknown) {
       busy = {since: Date.now(), gen};
       return last ? withTimeout(handleStroke(last), STROKE_TIMEOUT_MS) : undefined;
     })
-    .catch((e: any) =>
-      report({stillMs: 0, holdSource: 'clock', result: `error: ${e?.message ?? e}`, details: []}),
-    )
+    .catch((e: any) => {
+      ev(`stroke error: ${e?.message ?? e}`);
+      report({stillMs: 0, holdSource: 'clock', result: `error: ${e?.message ?? e}`, details: []});
+    })
     .finally(() => {
       if (busy?.gen === gen) {
         busy = null;
@@ -697,6 +746,7 @@ function onPenUp(msg: unknown) {
 }
 
 export function start() {
+  ev('plugin started: listeners registered');
   PluginManager.registerMotionListener(1, {
     onMsg(msg: unknown) {
       const e = msg as PenMotion;
