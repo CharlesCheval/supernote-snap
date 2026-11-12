@@ -3,6 +3,7 @@ import {isInk, strokeOrigin} from './guard';
 import {HoldTracker, PenMotion} from './hold';
 import {P, Recognition, Shape, arrowPoints, recognize, trailingStillCount} from './recognize';
 import {axisPoints, dotPoints} from './symbols';
+import {screenToPage} from './pagemap';
 import {getSettings} from './settings';
 
 /**
@@ -128,18 +129,28 @@ function convertible(s: Size | null): Size | null {
   }
 }
 
+/** How EMR points become page pixels: the conversion and its description. */
+type EmrMap = {label: string; toPage: (p: P) => P; display: Size};
+
 /**
- * Page size in pixels, used to convert EMR points. The page's own size first
- * (PluginFileAPI.getPageSize, as Ratta asks for coordinate conversion): the
- * display size differs from it when a page made for another device is shown
- * (on a Manta, an A5X-sized page: shapes came out about 37 % too large and
- * shifted, reported). The display size only when the page size is missing or
- * not one PointUtils can convert.
+ * EMR points to page pixels: converted with the display size (EMR follows the
+ * screen), then scaled to the page's own size (see screenToPage). Null when
+ * the display size is missing or unknown to PointUtils.
  */
-async function pageSize(page: number): Promise<Size | null> {
+async function emrMap(page: number): Promise<EmrMap | null> {
+  const display = convertible(ok<Size>(await PluginCommAPI.getPageDisplaySize()));
+  if (!display) {
+    return null;
+  }
   const path = ok<string>(await PluginCommAPI.getCurrentFilePath());
-  const own = path ? convertible(ok<Size>(await PluginFileAPI.getPageSize(path, page))) : null;
-  return own ?? convertible(ok<Size>(await PluginCommAPI.getPageDisplaySize()));
+  const own = path ? ok<Size>(await PluginFileAPI.getPageSize(path, page)) : null;
+  const pagePx = validSize(own) ? own : null;
+  const same = !pagePx || (pagePx.width === display.width && pagePx.height === display.height);
+  return {
+    label: same ? `emr→px ${display.width}×${display.height}` : `emr→px ${display.width}×${display.height} → page ${pagePx!.width}×${pagePx!.height}`,
+    toPage: p => screenToPage(PointUtils.emrPoint2Android(p, display), display, same ? null : pagePx),
+    display,
+  };
 }
 
 /**
@@ -167,19 +178,16 @@ async function pointSets(el: Element, size: number): Promise<PointSet[]> {
   // 2. Sample points in EMR coordinates, converted to pixels with the page size.
   // 3. The same raw EMR points, only scaled: immune to a wrong page size (zoom, landscape).
   try {
-    const ps = await pageSize(el.pageNum);
+    const map = await emrMap(el.pageNum);
     const emr = await stroke.points.getRange(0, size);
-    if (ps) {
-      sets.push({
-        label: `emr→px ${ps.width}×${ps.height}`,
-        points: emr.map(p => PointUtils.emrPoint2Android(p, ps)),
-        toPixel: identity,
-      });
-      const k = (Math.max(ps.width, ps.height) - 1) / PointUtils.getRealMaxX(ps);
+    if (map) {
+      sets.push({label: map.label, points: emr.map(map.toPage), toPixel: identity});
+      const d = map.display;
+      const k = (Math.max(d.width, d.height) - 1) / PointUtils.getRealMaxX(d);
       sets.push({
         label: 'emr (raw)',
         points: emr.map(p => ({x: p.x * k, y: p.y * k})),
-        toPixel: q => PointUtils.emrPoint2Android({x: q.x / k, y: q.y / k}, ps),
+        toPixel: q => map.toPage({x: q.x / k, y: q.y / k}),
       });
     }
   } catch (e: any) {
@@ -347,8 +355,8 @@ async function measureHold(stroke: NonNullable<Element['stroke']>, size: number,
   }
   // Fallback: count still points at the end of the stroke.
   const count = Math.min(TAIL_POINTS, size);
-  const ps = await pageSize(page);
-  const tail = ps ? (await stroke.points.getRange(size - count, count)).map(p => PointUtils.emrPoint2Android(p, ps)) : [];
+  const map = await emrMap(page);
+  const tail = map ? (await stroke.points.getRange(size - count, count)).map(map.toPage) : [];
   const still = trailingStillCount(tail, getSettings().stillRadius);
   return {stillMs: Math.round((still * 1000) / ASSUMED_POINTS_PER_SECOND), holdSource: 'points' as const};
 }
