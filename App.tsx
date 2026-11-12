@@ -19,7 +19,7 @@ import {
   subscribe,
   updateSettings,
 } from './src/settings';
-import {lastMeasure, subscribeMeasures} from './src/snapper';
+import {lastDiag, lastMeasure, subscribeMeasures} from './src/snapper';
 
 type NumKey = keyof typeof LIMITS;
 
@@ -358,6 +358,9 @@ function App(): React.JSX.Element {
           <Text style={styles.resetText}>Reset to defaults</Text>
         </Pressable>
       </View>
+      {lastDiag.length ? (
+        <Text style={styles.diag}>{lastDiag.join('\n')}</Text>
+      ) : null}
     </ScrollView>
   );
 }
@@ -525,6 +528,7 @@ const styles = StyleSheet.create({
   },
   resetText: {fontSize: 16, color: '#444444'},
   measure: {flex: 1, fontSize: 18, color: '#000000', marginRight: 16},
+  diag: {fontSize: 15, color: '#000000', marginTop: 8},
 });
 
 export default App;
